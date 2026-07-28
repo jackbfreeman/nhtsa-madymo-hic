@@ -1240,8 +1240,7 @@ missing_vars <- madymo_nhtsa_df %>%
 madymo_nhtsa_df$head_injury <- as.numeric(madymo_nhtsa_df$CONCUSSION == "1")
 miss_design <- build_survey_design(madymo_nhtsa_df)
 svyby(~ head_injury, ~ complete_case, miss_design, svymean)
-# difference between prevalences was much smaller than SE; missingness is 
-# random with respect to the outcome, so listwise deletion is appropriate
+# difference between prevalences was much smaller than SE; missingness is random with respect to the outcome, so listwise deletion is appropriate
 ```
 
 ```{r remove missing values listwise, include=FALSE}
@@ -1271,8 +1270,7 @@ rm(
 ```
 
 ```{r occ, env, sim variable groups, include=FALSE}
-# analysis variable groups — defined here so the modeling chunks below
-# (multiple imputation, stepwise selection) have them available
+# analysis variable groups — defined here so the modeling chunks below have them available
 # Define the occupant variables
 occ_vars <- c("SEX_BIN", "AGE", "BMI")
 print(paste("Occupant variables: ", paste(occ_vars, collapse = ", ")))
@@ -2596,7 +2594,7 @@ All data manipulation and analyses were performed using R (version 4.4.2) [@team
 
 ### Baseline descriptive statistics
 
-Of the `r format(nrow(madymo_nhtsa_df_listwise_cds), big.mark = ",")` occupants in the final dataset, `r sum(madymo_nhtsa_df_listwise_cds$CONCUSSION == 1)` (`r round(mean(madymo_nhtsa_df_listwise_cds$CONCUSSION == 1) * 100, 1)`%) had a head injury. All independent variables were tabulated, separated by their head injury status. Continuous variables were summarized by a mean value and standard deviation, as well as odds ratios (OR) between individuals who had a head injury and those who did not. Categorical variables were summarized with a count and percentage of the total for each level as well as ORs for each level. Differences between occupants with and without head injury were statistically tested using a weighted t-test for continuous variables and a weighted Wald test for categorical variables.
+Of the `r format(nrow(madymo_nhtsa_df_listwise_cds), big.mark = ",")` occupants in the final dataset, `r sum(madymo_nhtsa_df_listwise_cds$CONCUSSION == 1)` (`r round(mean(madymo_nhtsa_df_listwise_cds$CONCUSSION == 1) * 100, 1)`%) had a head injury. All independent variables were tabulated, separated by their head injury status. Continuous variables were summarized by a mean value and standard deviation, as well as odds ratios (OR) between individuals who had a head injury and those who did not. Categorical variables were summarized with a count and percentage of the total for each level as well as ORs for each level. Differences between occupants with and without head injury were statistically tested using a weighted t-test for continuous variables and a weighted Wald test for categorical variables. Before deletion, missing values were limited to BMI (n = 1,903, 14%), drug involvement (n = 2,823, 21%), and alcohol involvement (n = 1,606, 12%); all other analysis variables were complete or did not exceed 2% missingness.
 
 ### Association
 
@@ -2657,8 +2655,6 @@ These results indicate that, for limited applications, a MADYMO HIC~15~ analysis
 The large sample size is a major strength in this study. As discussed in \@ref(previous-literature), small sample size and older simulation models are two likely reasons for the conclusions by Moran et al. [@moran2004] that MADYMO was a poor predictor of head injury severity. The library of MADYMO simulations, differentiated by the simulation variable values, is another strength because it allowed the HIC~15~ value to be as closely matched to the individual NASS-CDS individuals as MADYMO allows with the most current simulation template.
 
 The model also has some weaknesses, including the inflexibility of the MADYMO FORTE frontal crash model, specifically that it only accommodates a dummy model with 50th percentile height and weight, *i.e.*, an average adult male body. The dataset concerns only US drivers, so these results may not be relevant to drivers outside of that country. The data also only relate to frontal crashes, so the results may not be applicable to other crash types, such as rear or side impacts or rollovers. Misclassification in the form of under-reporting of injury is also a well-recognized problem in the NASS-CDS database [@freeman2020], which could bias the results toward the null.
-
-The forward stepwise regression process was also conducted with a dataset with multiple imputation instead of listwise deletion. Because the two final multivariate models were different, multiple imputation was abandoned, as it appeared to distort the relationship.
 
 These results can serve as evidence for the validity of MADYMO-generated HIC~15~ scores to predict head injury in car crashes. As a validated metric, MADYMO HIC~15~ scores can provide a more efficient and nondestructive manner of testing car safety, in comparison to traditional full-scale crash testing using an ATD or human volunteers.
 
