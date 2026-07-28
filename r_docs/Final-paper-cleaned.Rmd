@@ -2869,12 +2869,6 @@ png(file.path("r_docs", "Figure_3.png"), width = 10, height = 5, units = "in", r
   dev.off()
 ```
 
-```{r roc_graphical_abstract, include=FALSE}
-png(file.path("r_docs", "roc_small.png"), width = 4.5, height = 3.5, units = "in", res = 1000)
-  par(mfrow = c(1, 1))
-  roc_plot(univariate_model, title = "Univariate Model")
-  dev.off()
-```
 
 <!-- the {.unnumbered} makes the section excluded from the numbering (Table of Contents) system -->
 
@@ -2882,7 +2876,7 @@ png(file.path("r_docs", "roc_small.png"), width = 4.5, height = 3.5, units = "in
 
 ## Introduction {#abstractintroduction .unnumbered}
 
-Traffic crashes can result in traumatic brain injury (TBI). The MADYMO computer program simulates crash impacts on a virtual occupant, generating the Head Injury Criterion (HIC~15~) as an inexpensive index of TBI risk; however, MADYMO's HIC~15~ has not been validated against real-world injury outcomes. This study compared MADYMO-generated HIC~15~ scores to head injury outcomes in US crash data, incorporating crash and occupant covariates, to assess HIC~15~'s predictive quality.
+Traffic crashes can result in traumatic brain injury (TBI). The MADYMO computer program simulates crash impacts on a virtual occupant, generating the Head Injury Criterion (HIC~15~) as an inexpensive index of TBI risk; however, MADYMO's HIC~15~ has not been validated against real-world injury outcomes. This cross-sectional analysis compared MADYMO-generated HIC~15~ scores to head injury outcomes in US crash data, incorporating crash and occupant covariates, to assess HIC~15~'s predictive quality.
 
 ## Methods {#abstractmethods .unnumbered}
 
@@ -2897,16 +2891,6 @@ As the remaining multivariate model showed no significant improvement (DeLong's 
 ## Discussion {#abstractdiscussion .unnumbered}
 
 Given similar discrimination ability between the models, the HIC~15~ scores from MADYMO simulations can predict real-world head injuries with acceptable discrimination, and this prediction is influenced by BMI and time of day. These variables do not significantly change the predictive ability of the HIC~15~.
-
-<!-- Still to do for AAP: -->
-
-<!-- Abstract: 250 (238 currently) word max -->
-
-<!-- Graphical abstract (micro-poster <https://www.elsevier.com/researcher/author/tools-and-resources/graphical-abstract>); upload data to appropriate depository (<https://www.elsevier.com/researcher/author/tools-and-resources/research-data/data-guidelines>, maybe OSF already counts? also consider submitting to MethodsX or Data in Brief? <https://www.elsevier.support/publishing/answer/cosubmission-to-data-in-brief-and-methodsx>) -->
-
-<!-- Pull together sample MADYMO animation -->
-
-<!-- Review all other requirements before submitting: <https://www.sciencedirect.com/journal/accident-analysis-and-prevention/publish/guide-for-authors> -->
 
 # Introduction {#introduction}
 
@@ -2946,9 +2930,13 @@ The aim of this study is to determine the degree to which MADYMO-generated HIC~1
 
 ## Dataset
 
-Two datasets were accessed for this study: (1) real-world crash data from NHTSA’s NASS-CDS and (2) simulated crashes from the MADYMO computer program (a collection of 288 simulations that vary by crash speed, seat position, seatbelt use, and airbag deployment to reflect the variations in the NASS-CDS data set). Airbag- and seatbelt-free models were created manually by the author.
+Two datasets were accessed for this cross-sectional study: (1) real-world crash data from NHTSA’s NASS-CDS and (2) simulated crashes from the MADYMO computer program (a collection of 288 simulations that vary by crash speed, seat position, seatbelt use, and airbag deployment to reflect the variations in the NASS-CDS data set). Airbag- and seatbelt-free models were created manually by the author.
 
-The NASS-CDS is an annually repeated data collection effort with a complex survey data design that was active from 1979 to 2015 in the US, after which it was replaced by the Crash Injury Sampling System (CISS). Because of substantive differences between the eras of data collection in the NASS-CDS, and the altered nature of the CISS complicating the potential for merging with the NASS-CDS, the years 2000 to 2015 (113,579 occupants) were used for the present research [@administration2024]. The sampled crashes are drawn from 24 to 36 (depending on the year) “Primary Sampling Units,” which are nationally representative geographic areas, and the results of the investigations are weighted to yield a national estimate [@zhangf2019]. Occupants were included in this study only if they were involved in a single-event frontal crash between 5 and 40 miles per hour (mph), they were at least 20 years old, and there were no missing data for seatbelt use, airbag deployment, or head injury presence or absence. Observations with "other" or "unknown" values for weather and vehicle type were excluded. Potential confounding factors were separated into 3 groups:
+The NASS-CDS is an annually repeated data collection effort with a complex survey data design that was active from 1979 to 2015 in the US, after which it was replaced by the Crash Injury Sampling System (CISS). Because of substantive differences between the eras of data collection in the NASS-CDS, and the altered nature of the CISS complicating the potential for merging with the NASS-CDS, the years 2000 to 2015 (113,579 occupants) were used for the present research [@administration2024]. The sampled crashes are drawn from 24 to 36 (depending on the year) “Primary Sampling Units,” which are nationally representative geographic areas, and the results of the investigations are weighted to yield a national estimate [@zhangf2019]. Occupants were included in this study only if they were involved in a single-event frontal crash between 5 and 40 miles per hour (mph), they were at least 20 years old, and there were no missing data for seatbelt use, airbag deployment, or head injury presence or absence. Observations with "other" or "unknown" values for weather and vehicle type were excluded. Sex was the occupant's biological sex as recorded in NASS-CDS (male/female); gender was not available.
+
+The outcome was the presence of a concussion, ascertained from the NASS-CDS occupant injury records: an occupant was classified as a case if any recorded injury carried the concussion lesion code (lesion "K" in the NASS-CDS Occupant Injury Classification [cite the coding manual]), and as a control otherwise. Concussion coding was harmonized across the AIS coding revisions used over the study period. Throughout, this concussion outcome is referred to as head injury.
+
+Potential confounding factors were separated into 3 groups:
 
 -   occupant (age [years], BMI, sex [male, female]),
 
@@ -2976,7 +2964,7 @@ A univariate logistic regression model compared HIC~15~ and head injury. A multi
 
 Receiver-operating characteristic (ROC) curves represent (Figure \@ref(fig:roc)) the univariate and multivariate regression models. From these curves, the area under the curve (AUC) value was used to determine the quality of HIC~15~'s head injury risk prediction. The DeLong test for correlated ROC curves [@delong1988] was used to compare the AUC values of the univariate and multivariate model, and the multivariate model would be preferred for analysis if it significantly improved predictive ability.
 
-# **Results**
+# Results
 
 ## Baseline characteristics
 
@@ -3059,19 +3047,21 @@ for (model in model_comparison_list_cds_full) {
 
 # Supplemental documents {#supplementaldocuments}
 
-B. 2015 NASS-CDS Analytical User Manual (https://osf.io/vhk2p/files/mcrkz)
+A. 2015 NASS-CDS Analytical User Manual (https://osf.io/vhk2p/files/mcrkz)
 
-C. Manuscript and analysis code (https://doi.org/10.17605/OSF.IO/VHK2P)
+B. Manuscript and analysis code (https://doi.org/10.17605/OSF.IO/VHK2P)
 
-D. Datasets (https://osf.io/vhk2p/files/n9w8t)
+C. Datasets (https://osf.io/vhk2p/files/n9w8t)
 
-E. MADYMO animation of a frontal crash simulation (https://osf.io/vhk2p/files/t6n9e)
+D. MADYMO animation of a frontal crash simulation (https://osf.io/vhk2p/files/t6n9e)
+
+E. GitHub repository for project (https://github.com/jackbfreeman/nhtsa-madymo-hic)
 
 \newpage
 
 # Declaration of generative AI and AI-assisted technologies in the manuscript preparation process:
 
-In preparing this manuscript, the author utilized ChatGPT and Claude as assistive tools for writing and debugging R code. All AI-generated output was subsequently reviewed and revised by the author as appropriate. The author assumes complete responsibility for the final content of this publication.
+During the preparation of this work the author used ChatGPT and Claude in order to write and debug R code. After using this tool, the author reviewed and edited the content as needed and takes full responsibility for the content of the published article.
 
 # Declaration of competing interest:
 
@@ -3083,17 +3073,7 @@ This work was supported by Forensic Research + Analysis. The funder had no role 
 
 # Data availability:
 
-The data, analysis code, and supplementary materials that support the findings of this study are openly available in the Open Science Framework (OSF) at https://doi.org/10.17605/OSF.IO/VHK2P [@freeman2026data]. The underlying crash data are publicly available from the U.S. National Highway Traffic Safety Administration's National Automotive Sampling System Crashworthiness Data System (NASS-CDS).
-
-\newpage
-
-# Acknowledgements
-
-Thank you to Drs. Maurice Zeegers and Michael Freeman for their guidance through the planning, writing, and submission of this project, and to Dr. Wendy Leith for her expertise in statistical analysis of complex survey data.
-
-CRediT statement:
-
-*Jack Freeman*: Conceptualization, Methodology, Software, Validation, Formal analysis, Investigation, Data Curation, Writing - Original Draft & Review & Editing, Visualization; *Michael Freeman*: Conceptualization, Writing - Review & Editing, Supervision; *Maurice Zeegers*: Conceptualization, Methodology, Validation, Formal analysis, Investigation, Writing - Review & Editing, Supervision, Project Administration, Funding acquisition
+The data, analysis code, and supplementary materials that support the findings of this study are openly available in the Open Science Framework (OSF) at https://doi.org/10.17605/OSF.IO/VHK2P [@freeman2026data]. The versioned code is found at the GitHub repository (https://github.com/jackbfreeman/nhtsa-madymo-hic). The underlying crash data are publicly available from the U.S. National Highway Traffic Safety Administration's National Automotive Sampling System Crashworthiness Data System (NASS-CDS).
 
 \newpage
 
@@ -3144,6 +3124,18 @@ cat("\\end{table}\n")
 ```
 
 Table \ref{tab:VIF} demonstrates a significant (GVIF^(1/(2\*Df))^ \> 2) collinearity between HIC~15~ and crash speed, which is expected given that higher crash speeds cause more movement and thus higher HIC~15~ scores. The multivariate model without crash speed shows no significant collinearity between the remaining variables.
+
+\newpage
+
+# Acknowledgements
+
+Thank you to Drs. Maurice Zeegers and Michael Freeman for their guidance through the planning, writing, and submission of this project, and to Dr. Wendy Leith for her expertise in statistical analysis of complex survey data.
+
+CRediT statement:
+
+*Jack Freeman*: Conceptualization, Methodology, Software, Validation, Formal analysis, Investigation, Data Curation, Writing - Original Draft & Review & Editing, Visualization; *Michael Freeman*: Conceptualization, Writing - Review & Editing, Supervision; *Maurice Zeegers*: Conceptualization, Methodology, Validation, Formal analysis, Investigation, Writing - Review & Editing, Supervision, Project Administration, Funding acquisition
+
+\newpage
 
 # References
 
