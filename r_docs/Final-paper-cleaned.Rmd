@@ -32,7 +32,6 @@ library(vroom)       # fast read/write of cached .csv data
 library(misty)       # na.test() Little's MCAR test
 library(naniar)      # geom_miss_point() missingness visualization
 library(gridExtra)   # grid.arrange() multi-panel plots
-library(mice)        # multiple imputation
 library(kableExtra)  # publication tables
 library(knitr)       # kable() + knit options
 library(bookdown)    # pdf_document2 output format
@@ -58,11 +57,8 @@ data_path_nhtsa <- file.path("data", "NHTSA_databases", "NHTSA All files")
 #                   of the cached dataset), so most users leave this FALSE.
 #   REBUILD_MODELS  re-fit the stepwise survey models from the cached data.
 #                   Needs no raw inputs - set TRUE to reproduce the results.
-#   REBUILD_MICE    re-run the multiple-imputation sensitivity analysis. This is
-#                   slow, so it is kept as a separate opt-in layer.
 REBUILD_RAW    <- FALSE
 REBUILD_MODELS <- FALSE
-REBUILD_MICE   <- FALSE
 
 # ---- Study constants and helpers -------------------------------------------
 min_DV_MPH <- 5
@@ -602,6 +598,8 @@ nhtsa_combined_df_cds <- nhtsa_combined_df_cds %>%
     DV_MPH =
       ifelse(DV_MPH == 621, NA, DV_MPH),
     DVEST_MPH = round(DVEST_KPH * 0.621371, digits = 0),
+    DV_MPH =
+      ifelse(is.na(DV_MPH), DVEST_MPH, DV_MPH),
     BMI = round(BMI, digits = 0)
   )
 
@@ -1184,10 +1182,7 @@ compare_models <- function(models, multiplier = 1) {
 ```
 
 ```{r compare extreme adjustments, eval=FALSE, include=FALSE}
-# ==== Missingness and multiple imputation ====
-# Build two models, one before the extreme-value adjustment (madymo_nhtsa_df_full)
-# and one after (the updated madymo_nhtsa_df), then evaluate both to compare
-# their ROC curves and AUC. The next line errors on incomplete variables.
+# Evaluate the model with HIC15 as the predictor for concussion on the full dataset and the extreme-value-adjusted dataset
 model_eval_full <- evaluate_model(
   formula = "CONCUSSION ~ HIC15",
   data = madymo_nhtsa_df_full
@@ -1222,6 +1217,15 @@ missing_values$percent <- round((missing_values$missing/nrow(madymo_nhtsa_df))*1
 
 print(missing_values)
 
+# variable missing percent
+#   <chr>      <int>   <dbl>
+# 1 DRGINV      2823      21
+# 2 BMI         1903      14
+# 3 ALCINV      1606      12
+# 4 TIME          60       0
+# 5 TIME_cat      60       0
+# 6 SEX_BIN        6       0
+
 # Select variables missing in 3% or more of rows
 missing_vars <- madymo_nhtsa_df %>%
   summarise_all(~ sum(is.na(.))) %>%
@@ -1230,139 +1234,14 @@ missing_vars <- madymo_nhtsa_df %>%
   arrange(desc(missing)) %>%
   pull(variable)
 
-# Add HIC15 to missing_vars for comparison
-# missing_vars <- c(
-#   missing_vars,
-#   "HIC15"
-# )
+# "DRGINV" "BMI" "ALCINV"
 
-
-# Test each applicable variable for randomness of its missingness
-missing_results_df <- data.frame()
-for (i in 1:(length(missing_vars) - 1)) {
-  missing_test <- madymo_nhtsa_df %>%
-    select("HIC15", missing_vars[i])
-  # Record the variable's data type
-  var_type <- class(madymo_nhtsa_df[[missing_vars[i]]])
-  print(paste("Missing test: ", missing_vars[i]))
-  results <- na.test(
-    missing_test,
-    p.digits = 3, 
-    digits = 3, 
-    alpha = 0.05)
-  # Append the results to missing_results_df
-  missing_results_df <- rbind(
-    missing_results_df,
-    data.frame(
-      Variable = missing_vars[i],
-      Type = var_type,
-      No.missing = results$result$little$no.incomplete,
-      Test.stat.X2 = results$result$little$statistic,
-      P_Value = results$result$little$pval,
-      MCAR = ifelse(results$result$little$pval < 0.05, "No", "Yes")
-    )
-  )
-}
-
-# Print the test results
-missing_results_df
-
-# Store the variables that are MCAR
-mcar_vars <- missing_results_df %>%
-  filter(MCAR == "Yes") %>%
-  pull(Variable)
-
-# Store the non-MCAR numeric variables for plotting
-not_mcar_cont_vars <- missing_results_df %>%
-  filter(MCAR == "No" & Type == "numeric") %>%
-  pull(Variable)
-
-
-# Plot missingness for each non-MCAR continuous variable against HIC15 using geom_miss_point()
-# Build a list of ggplot objects
-ggplot_list <- list()
-for (i in 1:length(not_mcar_cont_vars)) {
-  ggplot_list[[i]] <- ggplot(madymo_nhtsa_df, aes(x = HIC15, y = .data[[not_mcar_cont_vars[i]]])) +
-    geom_miss_point() +
-    labs(
-      title = paste("Missingness for", not_mcar_cont_vars[i]), 
-      x = "HIC15", 
-      y = not_mcar_cont_vars[i]
-    ) +
-    theme_minimal()
-}
-# Adjust ncol to fit more panels per row
-grid.arrange(grobs = ggplot_list, ncol = 1)
-
-
-# Check for patterns in missingness with regression
-# Create a missingness indicator for every variable in missing_vars
-for (i in 1:length(missing_vars)) {
-  madymo_nhtsa_df[[paste0(missing_vars[i], "_missing")]] <- ifelse(is.na(madymo_nhtsa_df[[missing_vars[i]]]), 1, 0)
-}
-
-# Rebuild the survey design with the new missingness variables
-survey_design <- build_survey_design(madymo_nhtsa_df)
-# Model each missingness indicator against the other variables
-
-# BMI missingness
-missingness_model <- svyglm(
-  formula = BMI_missing ~ DRGINV + ALCINV + VEHTYPE + BMI + DV_MPH + HIC15,
-  design = survey_design,
-  family = quasibinomial()
-)
-
-summary(missingness_model)
-# No associations
-
-# DRGINV missingness
-missingness_model <- svyglm(
-  formula = DRGINV_missing ~ BMI + ALCINV + VEHTYPE + BMI + DV_MPH + HIC15,
-  design = survey_design,
-  family = quasibinomial()
-)
-
-summary(missingness_model)
-# Positively associated (p = 0.04) with ALCINVyes, ALCINVunknown, VEHTYPEpassenger vehicle, VEHTYPEtruck, VEHTYPEunknown/other
-
-# ALCINV missingness
-missingness_model <- svyglm(
-  formula = ALCINV_missing ~ BMI + DRGINV +  VEHTYPE + BMI + DV_MPH + HIC15,
-  design = survey_design,
-  family = quasibinomial()
-)
-
-summary(missingness_model)
-# Positively associated (p < 0.05) with DRGINVno, DRGINVyes, VEHTYPEpassenger vehicle, VEHTYPEtruck, respectively
-
-
-# VEHTYPE missing
-# missingness_model <- svyglm(
-#   formula = VEHTYPE_missing ~ BMI + DRGINV + ALCINV + BMI + DV_MPH + HIC15,
-#   design = survey_design,
-#   family = quasibinomial()
-# )
-
-# summary(missingness_model)
-# no associations
-
-
-# DV_MPH missingness
-missingness_model <- svyglm(
-  formula = DV_MPH_missing ~ BMI + DRGINV + ALCINV + BMI + VEHTYPE + HIC15,
-  design = survey_design,
-  family = quasibinomial()
-)
-
-summary(missingness_model)
-# No associations
-
-# BMI
-# t.test(BMI ~ WEATHER_missing, data = madymo_nhtsa_df)
-# wilcox.test(BMI ~ WEATHER_missing, data = madymo_nhtsa_df)
-
-# Check BMI against PSU
-# cliff.delta(PSU ~ WEATHER_missing, data = madymo_nhtsa_df)
+# examine head injury prevalence in complete cases vs. incomplete cases
+madymo_nhtsa_df$head_injury <- as.numeric(madymo_nhtsa_df$CONCUSSION == "1")
+miss_design <- build_survey_design(madymo_nhtsa_df)
+svyby(~ head_injury, ~ complete_case, miss_design, svymean)
+# difference between prevalences was much smaller than SE; missingness is 
+# random with respect to the outcome, so listwise deletion is appropriate
 ```
 
 ```{r remove missing values listwise, include=FALSE}
@@ -1403,241 +1282,6 @@ print(paste("Environment variables: ", paste(env_vars, collapse = ", ")))
 # Define the simulation variables
 sim_vars <- c("DV_MPH", "SEATPOS", "BELTUSE_BIN", "BAGDEPLOY_BIN")
 print(paste("Simulation variables: ", paste(sim_vars, collapse = ", ")))
-```
-
-```{r multiple imputation process, eval=REBUILD_MICE, include=FALSE}
-# Use multiple imputation to handle the remaining missingness
-# Exclude certain variables from the imputation predictors (1 = used as a predictor)
-pred <- make.predictorMatrix(madymo_nhtsa_df)
-pred[, c("ID", "PSU", "PSUSTRAT", "RATWGT", "YEAR", "MAKE", "HIC15")] <- 0
-
-# Run MICE
-imputed_data <- mice(madymo_nhtsa_df, predictorMatrix = pred, m = 5)
-
-# Compare the distribution of observed and imputed values
-densityplot(imputed_data, ~ BMI + ALCINV)
-
-# Save imputed_data to disk (reloaded in the next chunk)
-saveRDS(imputed_data, file = file.path("data", "imputed_data.rds"))
-```
-
-```{r functions for imputed survey logistic models, include=FALSE, eval=REBUILD_MICE}
-# Load imputed_data
-imputed_data <- readRDS(file = file.path("data", "imputed_data.rds"))
-
-# Reassemble the imputed datasets in long form (including the original)
-madymo_nhtsa_df_imp <- complete(imputed_data, action = "long", include = TRUE)
-
-madymo_nhtsa_df_imp2 <- complete(imputed_data, "all")
-
-# Build a weighted ROC curve and performance metrics from a pooled set of
-# imputed survey models by averaging the fitted values across imputations.
-evaluate_imputed_roc <- function(design, model) {
-  # Pool the imputed model results
-  model_pooled <- pool(model)
-  
-  # Extract fitted values from each imputation
-  fitted_per_imputation <- lapply(model$analyses, fitted)
-  
-  # Average across imputations
-  average_fitted <- rowMeans(do.call(cbind, fitted_per_imputation))
-  
-  # Extract required components from survey design
-  roc_data <- data.frame(
-    y = design$variables$CONCUSSION,
-    phat = average_fitted,
-    weights = design$variables$RATWGT
-  )
-
-  
-  # Create weighted ROC object
-  mycurve <- wroc(
-    response.var = "y",
-    phat.var = "phat",
-    weights.var = "weights",
-    data = roc_data,
-    tag.event = levels(roc_data$y)[2],
-    tag.nonevent = levels(roc_data$y)[1],
-    cutoff.method = "Youden"
-  )
-  
-  # Calculate prevalence of the event
-  event_level <- levels(roc_data$y)[2]
-  prevalence <- sum(roc_data$weights[roc_data$y == event_level]) / sum(roc_data$weights)
-    
-  
-  # Extract performance metrics
-  metrics_list <- list(
-    AUC = mycurve$wauc,
-    Optimal_Cutoff = mycurve$optimal.cutoff$cutoff.value,
-    Sensitivity = mycurve$optimal.cutoff$Sew,
-    Specificity = mycurve$optimal.cutoff$Spw,
-    # PPV
-    PPV = 100 * ((mycurve$optimal.cutoff$Sew * prevalence) / 
-                   ((mycurve$optimal.cutoff$Sew * prevalence) + 
-                      ((1 - mycurve$optimal.cutoff$Spw) * (1 - prevalence))))
-  )
-  
-  # Generate the ROC plot
-  roc_plot <- wroc.plot(
-    x = mycurve,
-    print.auc = TRUE,
-    print.cutoff = TRUE
-  )
-  
-  # Return both plot and metrics
-  return(list(
-    mycurve = mycurve,
-    metrics = metrics_list
-  ))
-}
-
-# Build one survey design per imputed dataset
-imputed_designs <- lapply(madymo_nhtsa_df_imp2, function(dataset) {
-  build_survey_design(dataset)
-})
-
-# Evaluate the overall performance of a set of imputed models, returning the
-# pooled weighted AUC, optimal cut-off, sensitivity, specificity, and PPV.
-evaluate_imputed_model <- function(model_list, imputed_designs = imputed_designs) {
-  # Average fitted values across imputations
-  fitted_per_imputation <- lapply(model_list, fitted)
-  average_fitted <- rowMeans(do.call(cbind, fitted_per_imputation))
-  
-  # Use the FIRST design (all imputed designs are structurally identical)
-  design <- imputed_designs[[1]]
-  
-  # Prepare ROC data
-  roc_data <- data.frame(
-    y = design$variables$CONCUSSION,
-    phat = average_fitted,
-    weights = design$variables$RATWGT
-  )
-  
-  # Create weighted ROC object
-  mycurve <- wroc(
-    response.var = "y",
-    phat.var = "phat",
-    weights.var = "weights",
-    data = roc_data,
-    tag.event = levels(roc_data$y)[2],
-    tag.nonevent = levels(roc_data$y)[1],
-    cutoff.method = "Youden"
-  )
-  
-  # Calculate prevalence
-  event_level <- levels(roc_data$y)[2]
-  prevalence <- sum(roc_data$weights[roc_data$y == event_level]) / sum(roc_data$weights)
-  
-  # Extract metrics
-  metrics_list <- list(
-    AUC = mycurve$wauc,
-    Optimal_Cutoff = mycurve$optimal.cutoff$cutoff.value,
-    Sensitivity = mycurve$optimal.cutoff$Sew,
-    Specificity = mycurve$optimal.cutoff$Spw,
-    PPV = 100 * ((mycurve$optimal.cutoff$Sew * prevalence) / 
-                   (mycurve$optimal.cutoff$Sew * prevalence + 
-                      (1 - mycurve$optimal.cutoff$Spw) * (1 - prevalence)))
-  )
-  
-  return(list(metrics = metrics_list))
-}
-
-
-# Fit a survey logistic model across all imputed datasets and return the list of
-# fitted models (to be pooled downstream).
-fit_imputed_models <- function(formula_as_text = "CONCUSSION ~ HIC15") {
-  fits <- lapply(madymo_nhtsa_df_imp2, function(dataset) {
-    # Rebuild the survey design for this imputed dataset
-    design_imp <- build_survey_design(dataset)
-    # Fit the model
-    svyglm(
-      as.formula(formula_as_text),
-      family = quasibinomial,
-      design = design_imp
-    )
-  })
-}
-
-# Fit and pool a survey model across imputations, then print a coefficient
-# summary with significance stars and formatted p-values.
-summarize_imputed_models <- function(formula_as_text = "CONCUSSION ~ HIC15") {
-  model_list <- fit_imputed_models(formula_as_text)
-  pooled_results <- pool(model_list)
-  results_summary <- summary(pooled_results)
-
-  # Add significance stars
-  results_summary$stars <- cut(
-    results_summary$p.value,
-    breaks = c(-Inf, 0.001, 0.01, 0.05, Inf),
-    labels = c("***", "**", "*", ""),
-    right = FALSE
-  )
-  
-  # Format the p-values for legibility
-  results_summary$p.value <- format_p(results_summary$p.value)
-  
-  print(results_summary)
-}
-
-
-```
-
-```{r imputed logistic models, eval=REBUILD_MICE, include=FALSE}
-# Univariate model on the imputed data
-uni_imp_fit <- summarize_imputed_models()
-
-# Test the final model from the listwise stepwise process
-# summarize_imputed_models("CONCUSSION ~ HIC15 + BMI + DV_MPH")
-
-# # model including occupant variables
-# occ_imp_fit <- summarize_imputed_models(paste("CONCUSSION ~ HIC15 +", paste(occ_vars, collapse = " + ")))
-# 
-# # omit SEX_BIN
-# occ_imp_fit <- summarize_imputed_models(paste("CONCUSSION ~ HIC15 +", paste(occ_vars[-1], collapse = " + ")))
-
-# Occupant group reduced to BMI (SEX_BIN and AGE dropped during selection)
-occ_keep <- setdiff(occ_vars, c("SEX_BIN", "AGE"))
-occ_imp_fit <- summarize_imputed_models(paste("CONCUSSION ~ HIC15 +", paste(occ_keep, collapse = " + ")))
-
-
-# # model including environment variables
-# env_imp_fit <- summarize_imputed_models(paste("CONCUSSION ~ HIC15 +", paste(env_vars, collapse = " + ")))
-# 
-# # omit WEATHER
-# env_imp_fit <- summarize_imputed_models(paste("CONCUSSION ~ HIC15 +", paste(env_vars[c(-1)], collapse = " + ")))
-# 
-# # omit MAKE
-# env_imp_fit <- summarize_imputed_models(paste("CONCUSSION ~ HIC15 +", paste(env_vars[c(-1, -2)], collapse = " + ")))
-# 
-# # omit MODELYR
-# env_imp_fit <- summarize_imputed_models(paste("CONCUSSION ~ HIC15 +", paste(env_vars[c(-1, -2, -3)], collapse = " + ")))
-# 
-# # omit VEHWGT
-# env_imp_fit <- summarize_imputed_models(paste("CONCUSSION ~ HIC15 +", paste(env_vars[c(-1, -2, -3, -4)], collapse = " + ")))
-
-# Environment group reduced to VEHTYPE (the only term that stayed significant)
-env_keep <- setdiff(env_vars, c("WEATHER", "MODELYR", "TIME_cat", "YEAR_cont"))
-env_imp_fit <- summarize_imputed_models(paste("CONCUSSION ~ HIC15 +", paste(env_keep, collapse = " + ")))
-
-
-# # model including simulation variables
-# sim_imp_fit <- summarize_imputed_models(paste("CONCUSSION ~ HIC15 +", paste(sim_vars, collapse = " + ")))
-# 
-# # omit SEATPOS
-# sim_imp_fit <- summarize_imputed_models(paste("CONCUSSION ~ HIC15 +", paste(sim_vars[c(-2)], collapse = " + ")))
-
-# Simulation group reduced to DV_MPH and BELTUSE_BIN (SEATPOS, BAGDEPLOY_BIN dropped)
-sim_keep <- setdiff(sim_vars, c("SEATPOS", "BAGDEPLOY_BIN"))
-sim_imp_fit <- summarize_imputed_models(paste("CONCUSSION ~ HIC15 +", paste(sim_keep, collapse = " + ")))
-
-
-# Combined model on all retained predictors
-final_keep <- c(occ_keep, env_keep, sim_keep)
-final_imp_fit <- summarize_imputed_models(paste("CONCUSSION ~ HIC15 +", paste(final_keep, collapse = " + ")))
-
-
-# This differs from the listwise-deleted model, so it is ignored going forward
 ```
 
 ```{r save madymo nhtsa df, include=FALSE}
@@ -2860,7 +2504,6 @@ ggsave(file.path("r_docs", "Figure_1.png"), plot = p, width = 10, height = 6, dp
 
 ```
 
-
 ```{r roc_img, include=FALSE}
 png(file.path("r_docs", "Figure_3.png"), width = 10, height = 5, units = "in", res = 1000)   
   par(mfrow = c(1, 2))
@@ -2868,7 +2511,6 @@ png(file.path("r_docs", "Figure_3.png"), width = 10, height = 5, units = "in", r
   roc_plot(multivariate_model_no_DV, title = "Multivariate Model")
   dev.off()
 ```
-
 
 <!-- the {.unnumbered} makes the section excluded from the numbering (Table of Contents) system -->
 
@@ -2934,7 +2576,7 @@ Two datasets were accessed for this cross-sectional study: (1) real-world crash 
 
 The NASS-CDS is an annually repeated data collection effort with a complex survey data design that was active from 1979 to 2015 in the US, after which it was replaced by the Crash Injury Sampling System (CISS). Because of substantive differences between the eras of data collection in the NASS-CDS, and the altered nature of the CISS complicating the potential for merging with the NASS-CDS, the years 2000 to 2015 (113,579 occupants) were used for the present research [@administration2024]. The sampled crashes are drawn from 24 to 36 (depending on the year) “Primary Sampling Units,” which are nationally representative geographic areas, and the results of the investigations are weighted to yield a national estimate [@zhangf2019]. Occupants were included in this study only if they were involved in a single-event frontal crash between 5 and 40 miles per hour (mph), they were at least 20 years old, and there were no missing data for seatbelt use, airbag deployment, or head injury presence or absence. Observations with "other" or "unknown" values for weather and vehicle type were excluded. Sex was the occupant's biological sex as recorded in NASS-CDS (male/female); gender was not available.
 
-The outcome was the presence of a concussion, ascertained from the NASS-CDS occupant injury records: an occupant was classified as a case if any recorded injury carried the concussion lesion code (lesion "K" in the NASS-CDS Occupant Injury Classification [cite the coding manual]), and as a control otherwise. Concussion coding was harmonized across the AIS coding revisions used over the study period. Throughout, this concussion outcome is referred to as head injury.
+Head injury was defined as the presence of a concussion in the occupant's NASS-CDS injury record, identified by the concussion lesion code ("LESION" or "lesion" (depending on the year) = "K") in the NASS injury coding system [@nass_coding_manual_2014]. Because the injury coding changed over the study period, concussion codes were harmonized across the Abbreviated Injury Scale (AIS) revisions in use. An occupant with any qualifying injury was counted as a case; all others served as controls.
 
 Potential confounding factors were separated into 3 groups:
 
@@ -2944,7 +2586,7 @@ Potential confounding factors were separated into 3 groups:
 
 -   and simulation (crash speed [mph], seat position [driver, front passenger], seatbelt use [yes, no], and airbag deployment [yes, no]).
 
-The inclusion and exclusion process resulted in a dataset of `r format(data_counts$after_filters, big.mark = ",")` occupants. After deletion of missing values, the remaining dataset contained `r format(nrow(madymo_nhtsa_df_listwise_cds), big.mark = ",")` observations. See Figure \@ref(fig:inexclusionflowdiagram).
+The inclusion and exclusion process resulted in a dataset of `r format(data_counts$after_filters, big.mark = ",")` occupants. Head-injury prevalence was similar among occupants with and without complete data (2.6% vs 2.7%), indicating that missingness was unrelated to the outcome; complete-case estimates are therefore expected to be unbiased [@white2010]. After deletion of missing values, the remaining dataset contained `r format(nrow(madymo_nhtsa_df_listwise_cds), big.mark = ",")` observations. See Figure \@ref(fig:inexclusionflowdiagram). No a priori sample-size calculation was performed; all eligible occupants in 2000–2015 were included.
 
 ![Flow diagram of inclusion and exclusion process](Figure_2.png){#fig:inexclusionflowdiagram width="200"}
 
@@ -2954,7 +2596,7 @@ All data manipulation and analyses were performed using R (version 4.4.2) [@team
 
 ### Baseline descriptive statistics
 
-All independent variables were tabulated, separated by their head injury status. Continuous variables were summarized by a mean value and standard deviation, as well as odds ratios (OR) between individuals who had a head injury and those who did not. Categorical variables were summarized with a count and percentage of the total for each level as well as ORs for each level. Differences between occupants with and without head injury were statistically tested using a weighted t-test for continuous variables and a weighted Wald test for categorical variables.
+Of the `r format(nrow(madymo_nhtsa_df_listwise_cds), big.mark = ",")` occupants in the final dataset, `r sum(madymo_nhtsa_df_listwise_cds$CONCUSSION == 1)` (`r round(mean(madymo_nhtsa_df_listwise_cds$CONCUSSION == 1) * 100, 1)`%) had a head injury. All independent variables were tabulated, separated by their head injury status. Continuous variables were summarized by a mean value and standard deviation, as well as odds ratios (OR) between individuals who had a head injury and those who did not. Categorical variables were summarized with a count and percentage of the total for each level as well as ORs for each level. Differences between occupants with and without head injury were statistically tested using a weighted t-test for continuous variables and a weighted Wald test for categorical variables.
 
 ### Association
 
@@ -2976,7 +2618,7 @@ table_1
 
 ## Association
 
-The HIC~15~ was significantly associated with head injury, according to the univariate logistic regression model. Other potentially relevant variables were added to the model, and crash speed, BMI, and time of day were retained in the multivariate model after stepwise selection. Crash speed was found to be highly collinear with HIC~15~, so a third model was created without crash speed to assess its influence on the relationship between HIC~15~ and head injury. The adjusted variance inflation factor (GVIF) values for the multivariate model with and without crash speed are shown in Table \ref{tab:VIF} in the Appendix, demonstrating that crash speed is highly collinear with HIC~15~ (GVIF^(1/(2\*Df))^ \> 2) [@fox1992]. Vehicle type was then excluded as well (p > 0.05). See Table \@ref(tab:modelcomparison) for a comparison of the univariate model and the multivariate model without crash speed.
+The HIC~15~ was significantly associated with head injury, according to the univariate logistic regression model. Other potentially relevant variables were added to the model, and crash speed, BMI, and time of day were retained in the multivariate model after stepwise selection. Crash speed was found to be highly collinear with HIC~15~, so a third model was created without crash speed to assess its influence on the relationship between HIC~15~ and head injury. The adjusted variance inflation factor (GVIF) values for the multivariate model with and without crash speed are shown in Table \ref{tab:VIF} in the Appendix, demonstrating that crash speed is highly collinear with HIC~15~ (GVIF^(1/(2\*Df))^ \> 2) [@fox1992]. Vehicle type was then excluded as well (p \> 0.05). See Table \@ref(tab:modelcomparison) for a comparison of the univariate model and the multivariate model without crash speed.
 
 Due to the fine resolution of the HIC~15~ scale, it will be represented here in 1,000 point steps. The HIC~15~ (min: `r round(min(madymo_nhtsa_df_listwise_cds$HIC15), digits = 2)`, max: `r round(max(madymo_nhtsa_df_listwise_cds$HIC15), digits = 2)`, SD: `r sd(madymo_nhtsa_df_listwise_cds$HIC15)`) had an odds ratio of `r format_model_result(univariate_model, mult= 1000)` per 1,000-point increase, meaning that for every 1,000 point increase in HIC~15~ score, the risk for head injury increases by `r (round(exp(univariate_model$metrics$beta*1000), digits = 2)-1)*100`%, suggesting that the HIC~15~ is associated with head injury. Table \@ref(tab:modelcomparison) shows the univariate model along with the multivariate model, which included BMI and time of day as covariates, with an odds ratio of `r format_model_result(multivariate_model_no_DV, mult = 1000)` per 1,000 HIC~15~ points.
 
@@ -3047,15 +2689,15 @@ for (model in model_comparison_list_cds_full) {
 
 # Supplemental documents {#supplementaldocuments}
 
-A. 2015 NASS-CDS Analytical User Manual (https://osf.io/vhk2p/files/mcrkz)
+A. 2015 NASS-CDS Analytical User Manual (<https://osf.io/vhk2p/files/mcrkz>)
 
-B. Manuscript and analysis code (https://doi.org/10.17605/OSF.IO/VHK2P)
+B. Manuscript and analysis code (<https://doi.org/10.17605/OSF.IO/VHK2P>)
 
-C. Datasets (https://osf.io/vhk2p/files/n9w8t)
+C. Datasets (<https://osf.io/vhk2p/files/n9w8t>)
 
-D. MADYMO animation of a frontal crash simulation (https://osf.io/vhk2p/files/t6n9e)
+D. MADYMO animation of a frontal crash simulation (<https://osf.io/vhk2p/files/t6n9e>)
 
-E. GitHub repository for project (https://github.com/jackbfreeman/nhtsa-madymo-hic)
+E. GitHub repository for project (<https://github.com/jackbfreeman/nhtsa-madymo-hic>)
 
 \newpage
 
@@ -3073,7 +2715,7 @@ This work was supported by Forensic Research + Analysis. The funder had no role 
 
 # Data availability:
 
-The data, analysis code, and supplementary materials that support the findings of this study are openly available in the Open Science Framework (OSF) at https://doi.org/10.17605/OSF.IO/VHK2P [@freeman2026data]. The versioned code is found at the GitHub repository (https://github.com/jackbfreeman/nhtsa-madymo-hic). The underlying crash data are publicly available from the U.S. National Highway Traffic Safety Administration's National Automotive Sampling System Crashworthiness Data System (NASS-CDS).
+The data, analysis code, and supplementary materials that support the findings of this study are openly available in the Open Science Framework (OSF) at <https://doi.org/10.17605/OSF.IO/VHK2P> [@freeman2026data]. The versioned code is found at the GitHub repository (<https://github.com/jackbfreeman/nhtsa-madymo-hic>). The underlying crash data are publicly available from the U.S. National Highway Traffic Safety Administration's National Automotive Sampling System Crashworthiness Data System (NASS-CDS).
 
 \newpage
 
@@ -3138,4 +2780,3 @@ CRediT statement:
 \newpage
 
 # References
-
