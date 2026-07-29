@@ -2669,7 +2669,7 @@ This study demonstrates that MADYMO-generated HIC~15~ scores accurately predict 
 
 \newpage
 
-```{r, include=FALSE, eval=FALSE}
+```{r full text readout of stepwise process, include=FALSE, eval=FALSE}
 model_comparison_list_cds_full <- c(
   "univariate_listwise_cds_stepwise",
   "model_list_all_cds_forward",
