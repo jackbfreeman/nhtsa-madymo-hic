@@ -1206,9 +1206,24 @@ comp <- c(
 compare_models(comp)
 ```
 
-```{r examine missingness, eval=FALSE, include=FALSE}
+```{r occ, env, sim variable groups, include=FALSE}
+# analysis variable groups — defined here so the modeling chunks below have them available
+# Define the occupant variables
+occ_vars <- c("SEX_BIN", "AGE", "BMI")
+print(paste("Occupant variables: ", paste(occ_vars, collapse = ", ")))
+# Define the environment variables
+env_vars <- c("WEATHER", "MODELYR", "TIME_cat", "VEHTYPE", "YEAR_cont")
+print(paste("Environment variables: ", paste(env_vars, collapse = ", ")))
+# Define the simulation variables
+sim_vars <- c("DV_MPH", "SEATPOS", "BELTUSE_BIN", "BAGDEPLOY_BIN")
+print(paste("Simulation variables: ", paste(sim_vars, collapse = ", ")))
+all_vars <- c("CONCUSSION", occ_vars, env_vars, sim_vars)
+```
+
+```{r examine missingness, include=FALSE}
 # Examine missingness across variables
-missing_values <- madymo_nhtsa_df %>%
+missing_values <- 
+  madymo_nhtsa_df[, all_vars] %>%
   summarise_all(~ sum(is.na(.))) %>%
   gather(variable, missing) %>%
   filter(missing > 0) %>%
@@ -1238,8 +1253,9 @@ missing_vars <- madymo_nhtsa_df %>%
 
 # examine head injury prevalence in complete cases vs. incomplete cases
 madymo_nhtsa_df$head_injury <- as.numeric(madymo_nhtsa_df$CONCUSSION == "1")
+madymo_nhtsa_df$complete_case <- complete.cases(madymo_nhtsa_df[, all_vars])
 miss_design <- build_survey_design(madymo_nhtsa_df)
-svyby(~ head_injury, ~ complete_case, miss_design, svymean)
+missing_prevalence_se_tab <- svyby(~ head_injury, ~ complete_case, miss_design, svymean)
 # difference between prevalences was much smaller than SE; missingness is random with respect to the outcome, so listwise deletion is appropriate
 ```
 
@@ -1264,22 +1280,9 @@ print(missing_values)
 
 
 # Drop environment objects that are no longer needed
-rm(
-  missing_values
-)
-```
-
-```{r occ, env, sim variable groups, include=FALSE}
-# analysis variable groups — defined here so the modeling chunks below have them available
-# Define the occupant variables
-occ_vars <- c("SEX_BIN", "AGE", "BMI")
-print(paste("Occupant variables: ", paste(occ_vars, collapse = ", ")))
-# Define the environment variables
-env_vars <- c("WEATHER", "MODELYR", "TIME_cat", "VEHTYPE", "YEAR_cont")
-print(paste("Environment variables: ", paste(env_vars, collapse = ", ")))
-# Define the simulation variables
-sim_vars <- c("DV_MPH", "SEATPOS", "BELTUSE_BIN", "BAGDEPLOY_BIN")
-print(paste("Simulation variables: ", paste(sim_vars, collapse = ", ")))
+# rm(
+#   missing_values
+# )
 ```
 
 ```{r save madymo nhtsa df, include=FALSE}
@@ -2584,7 +2587,7 @@ Potential confounding factors were separated into 3 groups:
 
 -   and simulation (crash speed [mph], seat position [driver, front passenger], seatbelt use [yes, no], and airbag deployment [yes, no]).
 
-The inclusion and exclusion process resulted in a dataset of `r format(data_counts$after_filters, big.mark = ",")` occupants. Head-injury prevalence was similar among occupants with and without complete data (2.6% vs 2.7%), indicating that missingness was unrelated to the outcome; complete-case estimates are therefore expected to be unbiased [@white2010]. After deletion of missing values, the remaining dataset contained `r format(nrow(madymo_nhtsa_df_listwise_cds), big.mark = ",")` observations. See Figure \@ref(fig:inexclusionflowdiagram). No a priori sample-size calculation was performed; all eligible occupants in 2000–2015 were included.
+The inclusion and exclusion process resulted in a dataset of `r format(data_counts$after_filters, big.mark = ",")` occupants. Head-injury prevalence was similar among occupants with and without complete data (`r ifelse(round(missing_prevalence_se_tab$head_injury[1]*100, digits = 1) == round(missing_prevalence_se_tab$head_injury[2]*100, digits = 1), paste0("both ", round(missing_prevalence_se_tab$head_injury[1]*100, digits = 1), "%"), paste0(round(missing_prevalence_se_tab$head_injury[1]*100, digits = 1), "% vs ", round(missing_prevalence_se_tab$head_injury[2]*100, digits = 1), "%"))`), indicating that missingness was unrelated to the outcome; complete-case estimates are therefore expected to be unbiased [@white2010]. After deletion of missing values, the remaining dataset contained `r format(nrow(madymo_nhtsa_df_listwise_cds), big.mark = ",")` observations. See Figure \@ref(fig:inexclusionflowdiagram). No a priori sample-size calculation was performed; all eligible occupants in 2000–2015 were included.
 
 ![Flow diagram of inclusion and exclusion process](Figure_2.png){#fig:inexclusionflowdiagram width="200"}
 
@@ -2594,7 +2597,7 @@ All data manipulation and analyses were performed using R (version 4.4.2) [@team
 
 ### Baseline descriptive statistics
 
-Of the `r format(nrow(madymo_nhtsa_df_listwise_cds), big.mark = ",")` occupants in the final dataset, `r sum(madymo_nhtsa_df_listwise_cds$CONCUSSION == 1)` (`r round(mean(madymo_nhtsa_df_listwise_cds$CONCUSSION == 1) * 100, 1)`%) had a head injury. All independent variables were tabulated, separated by their head injury status. Continuous variables were summarized by a mean value and standard deviation, as well as odds ratios (OR) between individuals who had a head injury and those who did not. Categorical variables were summarized with a count and percentage of the total for each level as well as ORs for each level. Differences between occupants with and without head injury were statistically tested using a weighted t-test for continuous variables and a weighted Wald test for categorical variables. Before deletion, missing values were limited to BMI (n = 1,903, 14%), drug involvement (n = 2,823, 21%), and alcohol involvement (n = 1,606, 12%); all other analysis variables were complete or did not exceed 2% missingness.
+Of the `r format(nrow(madymo_nhtsa_df_listwise_cds), big.mark = ",")` occupants in the final dataset, `r sum(madymo_nhtsa_df_listwise_cds$CONCUSSION == 1)` (`r round(mean(madymo_nhtsa_df_listwise_cds$CONCUSSION == 1) * 100, 1)`%) had a head injury. All independent variables were tabulated, separated by their head injury status. Continuous variables were summarized by a mean value and standard deviation, as well as odds ratios (OR) between individuals who had a head injury and those who did not. Categorical variables were summarized with a count and percentage of the total for each level as well as ORs for each level. Differences between occupants with and without head injury were statistically tested using a weighted t-test for continuous variables and a weighted Wald test for categorical variables. Before deletion, missing values were limited to BMI (n = `r missing_values$missing[2]`, `r missing_values$percent[2]`%), drug involvement (n = `r missing_values$missing[1]`, `r missing_values$percent[1]`%), and alcohol involvement (n = `r missing_values$missing[3]`, `r missing_values$percent[3]`%); all other analysis variables were complete or did not exceed 2% missingness.
 
 ### Association
 
