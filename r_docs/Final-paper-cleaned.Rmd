@@ -598,8 +598,6 @@ nhtsa_combined_df_cds <- nhtsa_combined_df_cds %>%
     DV_MPH =
       ifelse(DV_MPH == 621, NA, DV_MPH),
     DVEST_MPH = round(DVEST_KPH * 0.621371, digits = 0),
-    DV_MPH =
-      ifelse(is.na(DV_MPH), DVEST_MPH, DV_MPH),
     BMI = round(BMI, digits = 0)
   )
 
@@ -695,7 +693,7 @@ criteria_list <- c(
 
 nhtsa_combined_df_cds <- nhtsa_combined_df_cds %>%
   filter(
-    DVEST_MPH >= min_DV_MPH & DVEST_MPH <= max_DV_MPH
+    DV_MPH >= min_DV_MPH & DV_MPH <= max_DV_MPH
   )
 
 data_counts <- c(
@@ -706,7 +704,7 @@ data_counts <- c(
 criteria_list <- c(
   criteria_list,
   before_BELTUSE_BIN = paste0(
-    "Count after DVEST_MPH >= ", min_DV_MPH, " & DVEST_MPH <= ", max_DV_MPH, ": ", 
+    "Count after DV_MPH >= ", min_DV_MPH, " & DV_MPH <= ", max_DV_MPH, ": ", 
     data_counts$before_BELTUSE_BIN)
 )
 
@@ -924,7 +922,7 @@ madymo_nhtsa_df$TIME_cat_bin <- ifelse(
 ```
 
 ```{r define kept columns, include=FALSE}
-columns_final <- c("ID", "CONCUSSION", "BAGDEPLOY_BIN", "BELTUSE_BIN", "BMI", "HEIGHT", "WEIGHT", "SEATPOS", "SEX_BIN", "YEAR", "AGE", "DV_MPH", "DVEST_MPH", "PSU", "PSUSTRAT", "RATWGT", "ALCINV", "DRGINV", "MAKE", "MODELYR", "WEATHER", "TIME", "TIME_cat", "TIME_cat_bin", "VEHTYPE", "HIC15", "YEAR_cont")
+columns_final <- c("ID", "CONCUSSION", "BAGDEPLOY_BIN", "BELTUSE_BIN", "BMI", "HEIGHT", "WEIGHT", "SEATPOS", "SEX_BIN", "YEAR", "AGE", "DV_MPH", "PSU", "PSUSTRAT", "RATWGT", "MODELYR", "WEATHER", "TIME", "TIME_cat", "TIME_cat_bin", "VEHTYPE", "HIC15", "YEAR_cont")
 
 # Keep only the relevant columns
 madymo_nhtsa_df <- madymo_nhtsa_df %>%
@@ -1054,7 +1052,7 @@ roc_plot <- function(model_obj, title = "ROC Curve", x_lab ="1-Spw(c)", y_lab = 
 
 # Fit a survey logistic model and return the weighted ROC curve, performance
 # metrics, and the fitted model object.
-evaluate_model <- function(formula = "CONCUSSION ~ HIC15", data = madymo_nhtsa_df_listwise_cds, family = quasibinomial) {
+evaluate_model <- function(formula = "CONCUSSION ~ HIC15", data = madymo_nhtsa_df_listwise, family = quasibinomial) {
   # Build the survey design from the data
   design <- build_survey_design(data)
   
@@ -1232,14 +1230,12 @@ missing_values$percent <- round((missing_values$missing/nrow(madymo_nhtsa_df))*1
 
 print(missing_values)
 
-# variable missing percent
+#   variable missing percent
 #   <chr>      <int>   <dbl>
-# 1 DRGINV      2823      21
-# 2 BMI         1903      14
-# 3 ALCINV      1606      12
-# 4 TIME          60       0
-# 5 TIME_cat      60       0
-# 6 SEX_BIN        6       0
+# 1 BMI         1903      14
+# 2 DV_MPH       325       2
+# 3 TIME_cat      60       0
+# 4 SEX_BIN        6       0
 
 # Select variables missing in 3% or more of rows
 missing_vars <- madymo_nhtsa_df %>%
@@ -1263,13 +1259,13 @@ missing_prevalence_se_tab <- svyby(~ head_injury, ~ complete_case, miss_design, 
 # Drop every individual with any missing variable (listwise deletion)
 print(paste("Number of rows before removing missing values: ", nrow(madymo_nhtsa_df)))
 madymo_nhtsa_df_listwise <- madymo_nhtsa_df %>%
-  filter(complete.cases(.))
+  filter(complete_case)
 
 # Report the row count after deletion
 print(paste("Number of rows after removing missing values: ", nrow(madymo_nhtsa_df_listwise)))
 
 # Confirm no missing values remain
-missing_values <- madymo_nhtsa_df_listwise %>%
+missing_values_remaining <- madymo_nhtsa_df_listwise %>%
   summarise_all(~ sum(is.na(.))) %>%
   gather(variable, missing) %>%
   filter(missing > 0) %>%
@@ -1297,6 +1293,12 @@ madymo_nhtsa_df_listwise <- readRDS(file.path("data", "madymo_nhtsa_df_listwise.
 
 ```{r variables summary, include=FALSE}
 summary(madymo_nhtsa_df_listwise)
+```
+
+```{r weighted prevalence, include=FALSE}
+# weighted (population) head-injury prevalence in the analytic sample
+analytic_design <- build_survey_design(madymo_nhtsa_df_listwise)
+weighted_prev   <- 100 * coef(svymean(~ I(CONCUSSION == "1"), analytic_design))[2]
 ```
 
 ```{r stepwise regression function, include=FALSE}
@@ -1776,14 +1778,14 @@ stepwise_regression <- function(vars, data = madymo_nhtsa_df_listwise,
 
 ```{r save analysis dataset, include=FALSE}
 # Restrict to the NASS-CDS study years (2000-2015) and save for quick reloading
-madymo_nhtsa_df_listwise_cds <- madymo_nhtsa_df_listwise %>%
+madymo_nhtsa_df_listwise <- madymo_nhtsa_df_listwise %>%
   filter(YEAR %in% c(2000:2015))
-saveRDS(madymo_nhtsa_df_listwise_cds, file.path("data", "madymo_nhtsa_df_listwise_cds.rds"))
+saveRDS(madymo_nhtsa_df_listwise, file.path("data", "madymo_nhtsa_df_listwise.rds"))
 ```
 
 ```{r correlation, include=FALSE}
 # Build a correlation matrix of all continuous variables
-cor(select(madymo_nhtsa_df_listwise_cds, c(BMI, YEAR_cont, AGE, DV_MPH, MODELYR, TIME, HIC15)))
+cor(select(madymo_nhtsa_df_listwise, c(BMI, YEAR_cont, AGE, DV_MPH, MODELYR, TIME, HIC15)))
 # The matrix is printed at run time. The notable result is the strong
 # correlation between DV_MPH (crash speed) and HIC15 - expected, since the HIC
 # is derived from crash dynamics (see the GVIF results in the Appendix). The
@@ -1792,25 +1794,25 @@ cor(select(madymo_nhtsa_df_listwise_cds, c(BMI, YEAR_cont, AGE, DV_MPH, MODELYR,
 
 ```{r fit final models, include=FALSE, eval=REBUILD_MODELS}
 # Univariate logistic regression on HIC15
-univariate_listwise_cds_stepwise <- stepwise_regression(
+univariate_listwise_stepwise <- stepwise_regression(
   vars = c(),
-  data = madymo_nhtsa_df_listwise_cds,
+  data = madymo_nhtsa_df_listwise,
   report_title = "Univariate Logistic Regression",
   main_pred = "HIC15",
   outcome = "CONCUSSION"
 )
-summary(univariate_listwise_cds_stepwise$final_model$model)
+summary(univariate_listwise_stepwise$final_model$model)
 #               Estimate Std. Error t value Pr(>|t|)    
 # (Intercept) -3.602e+00  3.922e-01  -9.185 2.65e-07 ***
 # HIC15        1.743e-04  1.899e-05   9.176 2.68e-07 ***
-univariate_listwise_cds_stepwise$final_model$metrics$AUC
+univariate_listwise_stepwise$final_model$metrics$AUC
 # 0.7035596
 
 model_list_all_cds_forward <- stepwise_regression(
   vars = c(occ_vars, 
            env_vars, 
            sim_vars),
-  data = madymo_nhtsa_df_listwise_cds,
+  data = madymo_nhtsa_df_listwise,
   direction = "forward",
   report_title = "Multivariate Logistic Regression",
   main_pred = "HIC15",
@@ -1841,7 +1843,7 @@ model_list_all_cds_forward_no_DV <- stepwise_regression(
   vars = c(occ_vars, 
            env_vars, 
          sim_vars[sim_vars != "DV_MPH"]),
-  data = madymo_nhtsa_df_listwise_cds,
+  data = madymo_nhtsa_df_listwise,
   direction = "forward",
   report_title = "Multivariate Logistic Regression",
   main_pred = "HIC15",
@@ -1864,7 +1866,7 @@ vif(model_list_all_cds_forward_no_DV$final_model$model)
 
 model_list_all_cds_forward_non_log_no_DV_interaction <- stepwise_regression(
   vars = model_list_all_cds_forward_no_DV$final_terms,
-  data = madymo_nhtsa_df_listwise_cds,
+  data = madymo_nhtsa_df_listwise,
   direction = "forward",
   report_title = "Multivariate Logistic Regression",
   main_pred = "HIC15",
@@ -1875,7 +1877,7 @@ model_list_all_cds_forward_non_log_no_DV_interaction <- stepwise_regression(
 #   BMI:TIME_cat: min p = 0.0678 [FAIL]
 # [FAIL] No interaction met the p-value threshold. Interaction testing complete.
 
-univariate_model <- univariate_listwise_cds_stepwise$final_model
+univariate_model <- univariate_listwise_stepwise$final_model
 multivariate_model <- model_list_all_cds_forward$final_model
 multivariate_model_no_DV <- model_list_all_cds_forward_no_DV$final_model
 
@@ -1890,7 +1892,7 @@ compare_models(model_comparison_list_cds)
 
 ```{r save models, eval=REBUILD_MODELS, include=FALSE}
 save(
-  univariate_listwise_cds_stepwise,
+  univariate_listwise_stepwise,
   model_list_all_cds_forward,
   model_list_all_cds_forward_no_DV,
   univariate_model,
@@ -2231,7 +2233,7 @@ build_baseline_table <- function(df) {
     format = "latex",
     booktabs = TRUE,
     linesep = c(""),
-    caption = "Baseline Characteristics of Study Population",
+    caption = "Baseline characteristics and unadjusted associations with head injury",
     label = "baselinecharacteristics",
     col.names = new_colnames
   ) %>%
@@ -2258,10 +2260,11 @@ build_baseline_table <- function(df) {
     # Bold the header row
     row_spec(0, bold = T) %>%
     footnote(general = c(
-      "OR = odds ratio; SD = standard deviation, mph = miles per hour; BMI = body mass index; kg = kilogram; m = meter."),
-             general_title = "",
-             threeparttable = TRUE)
-
+      "OR = odds ratio; SD = standard deviation, mph = miles per hour; BMI = body mass index; kg = kilogram; m = meter.",
+      "Mean (SD) and counts (%) are unweighted; odds ratios and p-values are from survey-weighted univariate logistic regression. For continuous variables, the OR corresponds to the increment shown in the label (e.g., per 10-mph for crash speed)."),
+      general_title = "",
+      threeparttable = TRUE)
+  
   # Add a small gap below each section header's \hline, between the label and its first data row
   tbl_str <- gsub(
     "(\\\\textbf\\{[^}]+\\}\\}\\\\\\\\\n\\\\hline)",
@@ -2410,8 +2413,8 @@ design <- tibble::tribble(
   ~left,                           ~n_left, ~right,              ~n_right,
   "Base population",      data_counts$before_AGE,    "Demographic and crash\nexclusion criteria applied",    data_counts$before_AGE - data_counts$before_DOF1,
   "Study population",     data_counts$before_DOF1,     "Participants with\nmissing exposure data",             data_counts$before_DOF1 - data_counts$after_filters,
-  "Filtered dataset",    data_counts$after_filters,     "Participants with\nother missing values",     data_counts$after_filters - nrow(madymo_nhtsa_df_listwise_cds),
-  "Final dataset",        nrow(madymo_nhtsa_df_listwise_cds),     "",                  NA_integer_
+  "Filtered dataset",    data_counts$after_filters,     "Participants with\nother missing values",     data_counts$after_filters - nrow(madymo_nhtsa_df_listwise),
+  "Final dataset",        nrow(madymo_nhtsa_df_listwise),     "",                  NA_integer_
 )
 
 # Plot the exclusion flowchart and export it as a PNG
@@ -2523,7 +2526,7 @@ Traffic crashes can result in traumatic brain injury (TBI). The MADYMO computer 
 
 ## Methods {#abstractmethods .unnumbered}
 
-Data from the US NASS-CDS database (2000-2015) yielded `r format(data_counts$before_AGE, big.mark = ",")` occupants who were exposed to a frontal crash. A univariate logistic regression compared HIC~15~ to head injury, and then a stepwise regression model incorporated crash- and occupant-related variables. The predictive performance of the HIC~15~ was examined using receiver-operating characteristic (ROC) curves and area under the curve (AUC) values for each model.
+From the US NASS-CDS database (2000-2015), `r format(nrow(madymo_nhtsa_df_listwise), big.mark = ",")` adult occupants in single-event frontal crashes met the inclusion criteria and were analyzed. A univariate logistic regression compared HIC~15~ to head injury, and then a stepwise regression model incorporated crash- and occupant-related variables. The predictive performance of the HIC~15~ was examined using receiver-operating characteristic (ROC) curves and area under the curve (AUC) values for each model.
 
 ## Results {#abstractresults .unnumbered}
 
@@ -2575,7 +2578,7 @@ The aim of this study is to determine the degree to which MADYMO-generated HIC~1
 
 Two datasets were accessed for this cross-sectional study: (1) real-world crash data from NHTSA’s NASS-CDS and (2) simulated crashes from the MADYMO computer program (a collection of 288 simulations that vary by crash speed, seat position, seatbelt use, and airbag deployment to reflect the variations in the NASS-CDS data set). Airbag- and seatbelt-free models were created manually by the author.
 
-The NASS-CDS is an annually repeated data collection effort with a complex survey data design that was active from 1979 to 2015 in the US, after which it was replaced by the Crash Injury Sampling System (CISS). Because of substantive differences between the eras of data collection in the NASS-CDS, and the altered nature of the CISS complicating the potential for merging with the NASS-CDS, the years 2000 to 2015 (113,579 occupants) were used for the present research [@administration2024]. The sampled crashes are drawn from 24 to 36 (depending on the year) “Primary Sampling Units,” which are nationally representative geographic areas, and the results of the investigations are weighted to yield a national estimate [@zhangf2019]. Occupants were included in this study only if they were involved in a single-event frontal crash between 5 and 40 miles per hour (mph), they were at least 20 years old, and there were no missing data for seatbelt use, airbag deployment, or head injury presence or absence. Observations with "other" or "unknown" values for weather and vehicle type were excluded. Sex was the occupant's biological sex as recorded in NASS-CDS (male/female); gender was not available.
+The NASS-CDS is an annually repeated data collection effort with a complex survey data design that was active from 1979 to 2015 in the US, after which it was replaced by the Crash Injury Sampling System (CISS). Because of substantive differences between the eras of data collection in the NASS-CDS, and the altered nature of the CISS complicating the potential for merging with the NASS-CDS, the years 2000 to 2015 (113,579 occupants) were used for the present research [@administration2024]. The sampled crashes are drawn from 24 to 36 (depending on the year) “Primary Sampling Units,” which are nationally representative geographic areas, and the results of the investigations are weighted to yield a national estimate [@zhangf2019]. Occupants were included in this study only if they were involved in a single-event frontal crash between 5 and 40 miles per hour (mph), they were at least 20 years old, and there were no missing data for seatbelt use, airbag deployment, or head injury presence or absence. Observations with "other" or "unknown" values for weather and vehicle type were excluded. Sex was the occupant's biological sex as recorded in NASS-CDS (male/female); gender was not available. Time of day was categorized as night (00:00–05:59), morning (06:00–11:59), afternoon (12:00–17:59), and evening (18:00–23:59).
 
 Head injury was defined as the presence of a concussion in the occupant's NASS-CDS injury record, identified by the concussion lesion code ("LESION" or "lesion" (depending on the year) = "K") in the NASS injury coding system [@nass_coding_manual_2014]. Because the injury coding changed over the study period, concussion codes were harmonized across the Abbreviated Injury Scale (AIS) revisions in use. An occupant with any qualifying injury was counted as a case; all others served as controls.
 
@@ -2587,7 +2590,7 @@ Potential confounding factors were separated into 3 groups:
 
 -   and simulation (crash speed [mph], seat position [driver, front passenger], seatbelt use [yes, no], and airbag deployment [yes, no]).
 
-The inclusion and exclusion process resulted in a dataset of `r format(data_counts$after_filters, big.mark = ",")` occupants. Head-injury prevalence was similar among occupants with and without complete data (`r ifelse(round(missing_prevalence_se_tab$head_injury[1]*100, digits = 1) == round(missing_prevalence_se_tab$head_injury[2]*100, digits = 1), paste0("both ", round(missing_prevalence_se_tab$head_injury[1]*100, digits = 1), "%"), paste0(round(missing_prevalence_se_tab$head_injury[1]*100, digits = 1), "% vs ", round(missing_prevalence_se_tab$head_injury[2]*100, digits = 1), "%"))`), indicating that missingness was unrelated to the outcome; complete-case estimates are therefore expected to be unbiased [@white2010]. After deletion of missing values, the remaining dataset contained `r format(nrow(madymo_nhtsa_df_listwise_cds), big.mark = ",")` observations. See Figure \@ref(fig:inexclusionflowdiagram). No a priori sample-size calculation was performed; all eligible occupants in 2000–2015 were included.
+The inclusion and exclusion process resulted in a dataset of `r format(data_counts$after_filters, big.mark = ",")` occupants. Missing values were limited to BMI (n = `r missing_values$missing[missing_values$variable == "BMI"]`, `r ifelse(missing_values$percent[missing_values$variable == "BMI"] < 1, "<1", missing_values$percent[missing_values$variable == "BMI"])`%), with time of day and sex missing in fewer than 1% of occupants; all other analysis variables were complete. Head-injury prevalence was similar among occupants with and without complete data (`r ifelse(round(missing_prevalence_se_tab$head_injury[1]*100, digits = 1) == round(missing_prevalence_se_tab$head_injury[2]*100, digits = 1), paste0("both ", round(missing_prevalence_se_tab$head_injury[1]*100, digits = 1), "%"), paste0(round(missing_prevalence_se_tab$head_injury[1]*100, digits = 1), "% vs ", round(missing_prevalence_se_tab$head_injury[2]*100, digits = 1), "%"))`), indicating that missingness was unrelated to the outcome; complete-case estimates are therefore expected to be unbiased [@white2010]. After deletion of missing values, the remaining dataset contained `r format(nrow(madymo_nhtsa_df_listwise), big.mark = ",")` observations. See Figure \@ref(fig:inexclusionflowdiagram). No a priori sample-size calculation was performed; all eligible occupants in 2000–2015 were included.
 
 ![Flow diagram of inclusion and exclusion process](Figure_2.png){#fig:inexclusionflowdiagram width="200"}
 
@@ -2597,11 +2600,11 @@ All data manipulation and analyses were performed using R (version 4.4.2) [@team
 
 ### Baseline descriptive statistics
 
-Of the `r format(nrow(madymo_nhtsa_df_listwise_cds), big.mark = ",")` occupants in the final dataset, `r sum(madymo_nhtsa_df_listwise_cds$CONCUSSION == 1)` (`r round(mean(madymo_nhtsa_df_listwise_cds$CONCUSSION == 1) * 100, 1)`%) had a head injury. All independent variables were tabulated, separated by their head injury status. Continuous variables were summarized by a mean value and standard deviation, as well as odds ratios (OR) between individuals who had a head injury and those who did not. Categorical variables were summarized with a count and percentage of the total for each level as well as ORs for each level. Differences between occupants with and without head injury were statistically tested using a weighted t-test for continuous variables and a weighted Wald test for categorical variables. Before deletion, missing values were limited to BMI (n = `r missing_values$missing[2]`, `r missing_values$percent[2]`%), drug involvement (n = `r missing_values$missing[1]`, `r missing_values$percent[1]`%), and alcohol involvement (n = `r missing_values$missing[3]`, `r missing_values$percent[3]`%); all other analysis variables were complete or did not exceed 2% missingness.
+All independent variables were tabulated, separated by their head injury status. Continuous variables were summarized by a mean value and standard deviation (SD), as well as odds ratios (OR) between individuals who had a head injury and those who did not. Categorical variables were summarized with a count and percentage of the total for each level as well as ORs for each level. Differences between occupants with and without head injury were statistically tested using a weighted t-test for continuous variables and a weighted Wald test for categorical variables.
 
 ### Association
 
-A univariate logistic regression model compared HIC~15~ and head injury. A multivariate model was built using a forward stepwise procedure. All observations with missing data points were excluded from the analysis. Regressions were done with the survey package [@survey] to accommodate the complex sampling design of the NASS-CDS database; the design was specified with stratification based on geographical regions and crash investigation centers, clustering within these strata corresponding to individual crash events and weights that scale observations to reflect national crash population estimates.
+A univariate logistic regression model compared HIC~15~ and head injury. A multivariate model was built using a forward stepwise procedure; interaction terms were tested during this process. All observations with missing data points were excluded from the analysis. Regressions were done with the survey package [@survey] to accommodate the complex sampling design of the NASS-CDS database; the design was specified with stratification based on geographical regions and crash investigation centers, clustering within these strata corresponding to individual crash events and weights that scale observations to reflect national crash population estimates.
 
 ### Prediction
 
@@ -2611,7 +2614,7 @@ Receiver-operating characteristic (ROC) curves represent (Figure \@ref(fig:roc))
 
 ## Baseline characteristics
 
-Among all covariates, these variables were not significantly (p \<0.05) related to head injury: seat position, seatbelt use, airbag deployment, age, sex, weather, or vehicle type or year; however, crash speed, BMI, and time of day were found to be related to risk of head injury, with the odds of injuries `r format_baseline_result(1)` times higher for every 10 miles per hour (\~16 kilometers per hour) increase in speed and `r format_baseline_result(9)` times higher for each 5-point increase in BMI. See Table \@ref(tab:baselinecharacteristics).
+Of the `r format(nrow(madymo_nhtsa_df_listwise), big.mark = ",")` occupants in the final dataset, `r sum(madymo_nhtsa_df_listwise$CONCUSSION == 1)` had a head injury (survey-weighted prevalence `r round(weighted_prev, digits = 1)`%). Among all covariates, these variables were not significantly (p \<0.05) related to head injury: seat position, seatbelt use, airbag deployment, age, sex, weather, or vehicle type or year; however, crash speed, BMI, and time of day were found to be related to risk of head injury, with the odds of injuries `r format_baseline_result(1)` times higher for every 10 miles per hour (\~16 kilometers per hour) increase in speed and `r format_baseline_result(9)` times higher for each 5-point increase in BMI. See Table \@ref(tab:baselinecharacteristics).
 
 ```{r, echo=FALSE}
 table_1
@@ -2621,7 +2624,7 @@ table_1
 
 The HIC~15~ was significantly associated with head injury, according to the univariate logistic regression model. Other potentially relevant variables were added to the model, and crash speed, BMI, and time of day were retained in the multivariate model after stepwise selection. Crash speed was found to be highly collinear with HIC~15~, so a third model was created without crash speed to assess its influence on the relationship between HIC~15~ and head injury. The adjusted variance inflation factor (GVIF) values for the multivariate model with and without crash speed are shown in Table \ref{tab:VIF} in the Appendix, demonstrating that crash speed is highly collinear with HIC~15~ (GVIF^(1/(2\*Df))^ \> 2) [@fox1992]. Vehicle type was then excluded as well (p \> 0.05). See Table \@ref(tab:modelcomparison) for a comparison of the univariate model and the multivariate model without crash speed.
 
-Due to the fine resolution of the HIC~15~ scale, it will be represented here in 1,000 point steps. The HIC~15~ (min: `r round(min(madymo_nhtsa_df_listwise_cds$HIC15), digits = 2)`, max: `r round(max(madymo_nhtsa_df_listwise_cds$HIC15), digits = 2)`, SD: `r sd(madymo_nhtsa_df_listwise_cds$HIC15)`) had an odds ratio of `r format_model_result(univariate_model, mult= 1000)` per 1,000-point increase, meaning that for every 1,000 point increase in HIC~15~ score, the risk for head injury increases by `r (round(exp(univariate_model$metrics$beta*1000), digits = 2)-1)*100`%, suggesting that the HIC~15~ is associated with head injury. Table \@ref(tab:modelcomparison) shows the univariate model along with the multivariate model, which included BMI and time of day as covariates, with an odds ratio of `r format_model_result(multivariate_model_no_DV, mult = 1000)` per 1,000 HIC~15~ points.
+Due to the fine resolution of the HIC~15~ scale, it will be represented here in 1,000 point steps. The HIC~15~ (min: `r round(min(madymo_nhtsa_df_listwise$HIC15), digits = 2)`, max: `r format(max(madymo_nhtsa_df_listwise$HIC15, big.mark = ","))`, SD: `r round(sd(madymo_nhtsa_df_listwise$HIC15), digits = 0)`) had an odds ratio of `r format_model_result(univariate_model, mult= 1000)` per 1,000-point increase, meaning that for every 1,000 point increase in HIC~15~ score, the risk for head injury increases by `r (round(exp(univariate_model$metrics$beta*1000), digits = 2)-1)*100`%, suggesting that the HIC~15~ is associated with head injury. Table \@ref(tab:modelcomparison) shows the univariate model along with the multivariate model, which included BMI and time of day as covariates, with an odds ratio of `r format_model_result(multivariate_model_no_DV, mult = 1000)` per 1,000 HIC~15~ points.
 
 ```{r modelcomparison, echo=FALSE}
 models_comparison_kable
@@ -2671,7 +2674,7 @@ This study demonstrates that MADYMO-generated HIC~15~ scores accurately predict 
 
 ```{r full text readout of stepwise process, include=FALSE, eval=FALSE}
 model_comparison_list_cds_full <- c(
-  "univariate_listwise_cds_stepwise",
+  "univariate_listwise_stepwise",
   "model_list_all_cds_forward",
   "model_list_all_cds_forward_no_DV"
 )
