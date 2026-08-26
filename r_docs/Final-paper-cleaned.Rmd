@@ -3,6 +3,12 @@ csl: "elsevier-vancouver.csl"
 link-citations: true
 citation-abbreviations: true
 output:
+  word_document: default
+  pdf_document:
+    toc: false
+  html_document:
+    toc: false
+    df_print: paged
   bookdown::pdf_document2:
     includes:
       in_header: import.sty
@@ -10,12 +16,6 @@ output:
     keep_tex: true
     number_sections: true
     toc: false
-  pdf_document:
-    toc: false
-  html_document:
-    toc: false
-    df_print: paged
-  word_document: default
 bibliography: references.bib
 editor_options:
   chunk_output_type: console
@@ -2562,7 +2562,7 @@ Figure \@ref(fig:currentstate) shows the current literature as numbered solid li
 
 ![Current state of research](Figure_1.png){#fig:currentstate width="467"}
 
-No previously published research has examined the influence of predictive features of the car crash on the HIC~15~’s association with real-world injury.
+No previously published research has examined the influence of predictive features of the car crash on the HIC~15~’s association with real-world injury. The present study therefore addresses a prior and more fundamental question: whether MADYMO-generated HIC~15~, matched to a crash on its major features (speed, seat position, seatbelt use, and airbag deployment) rather than reconstructed case by case, predicts real-world head injury at all, and is thus valid for broad, population-level use. Establishing this basic validity is a prerequisite for any case-specific application of the metric.
 
 288 simulations were modeled in MADYMO, yielding HIC~15~ scores, each varying by crash speed, seat position, seatbelt use, and airbag deployment; 36 levels of crash speed times 2 levels each of the 3 other simulation variables, resulting in $(36 \cdot 2^3) = 288$ unique simulations.
 
@@ -2661,6 +2661,8 @@ These results indicate that, for limited applications, a MADYMO HIC~15~ analysis
 The large sample size is a major strength in this study. As discussed in \@ref(previous-literature), small sample size and older simulation models are two likely reasons for the conclusions by Moran et al. [@moran2004] that MADYMO was a poor predictor of head injury severity. The library of MADYMO simulations, differentiated by the simulation variable values, is another strength because it allowed the HIC~15~ value to be as closely matched to the individual NASS-CDS individuals as MADYMO allows with the most current simulation template.
 
 The model also has some weaknesses, including the inflexibility of the MADYMO FORTE frontal crash model, specifically that it only accommodates a dummy model with 50th percentile height and weight, *i.e.*, an average adult male body. The dataset concerns only US drivers, so these results may not be relevant to drivers outside of that country. The data also only relate to frontal crashes, so the results may not be applicable to other crash types, such as rear or side impacts or rollovers. Misclassification in the form of under-reporting of injury is also a well-recognized problem in the NASS-CDS database [@freeman2020], which could bias the results toward the null.
+
+By design, each occupant was matched to a MADYMO simulation on the major features of the crash (speed, seat position, seatbelt use, and airbag deployment) rather than on every case-specific parameter. This reflects the study's aim: to test whether MADYMO HIC~15~ is broadly valid as a population-level predictor of head injury, not whether it can reproduce the outcome of any individual crash. Thus, these findings do not speak to the accuracy of a fully individualized reconstruction; that is a separate question that assumes the broad predictive validity examined here.
 
 These results can serve as evidence for the validity of MADYMO-generated HIC~15~ scores to predict head injury in car crashes. As a validated metric, MADYMO HIC~15~ scores can provide a more efficient and nondestructive manner of testing car safety, in comparison to traditional full-scale crash testing using an ATD or human volunteers.
 
