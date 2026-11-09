@@ -2522,15 +2522,15 @@ png(file.path("r_docs", "Figure_3.png"), width = 10, height = 5, units = "in", r
 
 ## Introduction {#abstractintroduction .unnumbered}
 
-Traffic crashes can result in traumatic brain injury (TBI). The MADYMO computer program simulates crash impacts on a virtual occupant, generating the Head Injury Criterion (HIC~15~) as an inexpensive index of TBI risk; however, MADYMO's HIC~15~ has not been validated against real-world injury outcomes. This cross-sectional analysis compared MADYMO-generated HIC~15~ scores to head injury outcomes in US crash data, incorporating crash and occupant covariates, to assess HIC~15~'s predictive quality.
+Traffic crashes are a common cause of traumatic brain injury (TBI). The MADYMO computer program simulates crash impacts on a virtual anthropometric test dummy occupant, generating Head Injury Criterion (HIC~15~) values as a metric of TBI risk. MADYMO HIC~15~ values have not been validated against real-world injury outcomes. The present cross-sectional analysis compared MADYMO-generated HIC~15~ scores to head injury outcomes using US crash injury data, incorporating crash and occupant covariates, to assess the predictive accuracy of the HIC~15~.
 
 ## Methods {#abstractmethods .unnumbered}
 
-From the US NASS-CDS database (2000-2015), `r format(nrow(madymo_nhtsa_df_listwise), big.mark = ",")` adult occupants in single-event frontal crashes met the inclusion criteria and were analyzed. A univariate logistic regression compared HIC~15~ to head injury, and then a stepwise regression model incorporated crash- and occupant-related variables. The predictive performance of the HIC~15~ was examined using receiver-operating characteristic (ROC) curves and area under the curve (AUC) values for each model.
+From the US NASS-CDS database (2000-2015), `r format(nrow(madymo_nhtsa_df_listwise), big.mark = ",")` (unweighted) adult occupants in single-event frontal crashes met the study inclusion criteria and the injury outcomes from the real world data were matched to HIC~15~ values from MADYMO simulations representing the crash severity, restraint status, and other variables. A univariate logistic regression was used to compare the simulated HIC~15~ values to the frequency of concussion, and then a stepwise regression model was used to incorporate crash- and occupant-related variables. The predictive performance of the HIC~15~ was examined using receiver-operating characteristic (ROC) curves and area under the curve (AUC) values for each model.
 
 ## Results {#abstractresults .unnumbered}
 
-The MADYMO-generated HIC~15~ is an acceptably accurate predictor of head injury risk (AUC = `r round(univariate_model$metrics$AUC, digits = 2)`). Crash speed was found to be highly collinear with HIC~15~ (GVIF^(1/(2\*Df))^ \> 2), so it was left out of the multivariate model (AUC = `r round(multivariate_model_no_DV$metrics$AUC, digits = 2)`), which included body mass index (BMI) and time of day as covariates.
+The MADYMO-generated HIC~15~ is an acceptably accurate predictor of head injury risk (AUC = `r round(univariate_model$metrics$AUC, digits = 2)`). Crash speed was found to be highly collinear with HIC~15~ (GVIF^(1/(2\*Df))^ \> 2), so it was left out of the multivariate model (AUC = `r round(multivariate_model_no_DV$metrics$AUC, digits = 2)`), which included body mass index (BMI) and time of day as significant covariates.
 
 As the remaining multivariate model showed no significant improvement (DeLong's test: z = `r round(delong_univariate_multivariate$z, digits = 2)`, p = `r round(delong_univariate_multivariate$p_value, digits = 2)`), the univariate model was preferred.
 
